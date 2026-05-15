@@ -6,7 +6,7 @@ import pygame_gui
 import grid
 import math
 import numpy as np
-
+from collections import deque
 # pygame setup
 pygame.init()
 info = pygame.display.Info()
@@ -16,6 +16,7 @@ screen_width = screen_height
 manager = pygame_gui.UIManager((screen_width, screen_height))
 
 screen = pygame.display.set_mode((screen_width, screen_height))
+region_surface = pygame.Surface((screen_width, screen_height))
 clock = pygame.time.Clock()
 running = True
 dt = 0
@@ -29,7 +30,11 @@ class State:
         self.creating_edge = False
         self.edge_start = None
         self.can_input = True
-        self.paint_area = False
+        self.update = True
+        self.filling_color = False
+        self.color_max_cycles = 200
+        self.color_fill = None
+        self.color_index = 0
 state = State()
 
 
@@ -39,8 +44,9 @@ class Options:
                   show_hitboxes: Literal["Full", "Small", "None"] = "None"):
         self.background_color = pygame.colordict.THECOLORS["white"]
         self.show_hitboxes = show_hitboxes
-        self.show_mouse_pos = True
-        self.show_hitbox_on_hover = True
+        self.show_mouse_pos = False
+        self.show_xy_hitbox_on_hover = False
+        self.show_hitbox_on_hover = False
         self.rainbow_boxes = False
         self.grid_scale = 2
         self.grid_width = 1
@@ -50,7 +56,7 @@ class Options:
         self.vertex_scale_step = 0.2
         self.start_dim = 3
         self.ghost_width = 3
-        self.vertex_color = pygame.colordict.THECOLORS["black"]
+        self.vertex_color = pygame.colordict.THECOLORS["blue"]
         self.vertex_width = 0   #0 means filled
         self.ghost_color = pygame.colordict.THECOLORS["grey"]
         self.ghost_scale = 0.6
@@ -60,13 +66,23 @@ class Options:
         self.vertex_hitbox_color = pygame.colordict.THECOLORS["orange"]
         self.color_hitbox_color = pygame.colordict.THECOLORS["white"]
         self.edge_width = 0.6
-        self.edge_hitbox_scaling = 0.3
+        self.edge_hitbox_scaling = 0.5
         self.edge_hitbox_color_rect_scaling = 0.2
         self.min_dm = 4
-        self.vertex_hitbox_scale = 0.6
+        self.vertex_hitbox_scale = 1.2
         self.show_ghost_vertex = True
         self.show_grid_lines = True
         self.color_hitboxes_stride = 3
+        self.color_cycles_mod = 0.05
+        self.target_fps = 30
+        self.vertex_ring = True
+        self.vertex_ring_color =  pygame.colordict.THECOLORS["black"]
+        self.edge_vertex_color_set = [pygame.colordict.THECOLORS["black"],pygame.colordict.THECOLORS["crimson"],pygame.colordict.THECOLORS["chocolate1"],pygame.colordict.THECOLORS["darkgoldenrod1"],
+                                      pygame.colordict.THECOLORS["darkgreen"],pygame.colordict.THECOLORS["darkblue"],pygame.colordict.THECOLORS["darkorchid1"],
+                                      pygame.colordict.THECOLORS["darkmagenta"],pygame.colordict.THECOLORS["white"],pygame.colordict.THECOLORS["teal"]]
+        self.region_color_set = [pygame.colordict.THECOLORS["lightblue4"],pygame.colordict.THECOLORS["lightcoral"],pygame.colordict.THECOLORS["lightsalmon"],pygame.colordict.THECOLORS["lightgoldenrod1"],
+                                 pygame.colordict.THECOLORS["lightgreen"],pygame.colordict.THECOLORS["lightskyblue"],pygame.colordict.THECOLORS["lightpink"],
+                                 pygame.colordict.THECOLORS["lightslateblue"],pygame.colordict.THECOLORS["white"],pygame.colordict.THECOLORS["lightseagreen"]]
 options = Options()
 
 """
@@ -149,7 +165,7 @@ def create_bindings():
         Binding(pygame.KEYDOWN, key=pygame.K_e, mod=pygame.KMOD_SHIFT)], 
         func=delete_edge_func)
     restart = Command("restart",[
-        Binding(pygame.KEYDOWN, key=pygame.K_p, mod=pygame.KMOD_NONE)],
+        Binding(pygame.KEYDOWN, key=pygame.K_r, mod=pygame.KMOD_NONE)],
         func=restart_func)
     toggle_ghost_vertecies = Command("toggle ghosts",[
         Binding(pygame.KEYDOWN, key=pygame.K_g, mod=pygame.KMOD_NONE)],
@@ -160,10 +176,50 @@ def create_bindings():
     toggle_paint = Command("toggle paint",[
         Binding(pygame.KEYDOWN, key=pygame.K_k, mod=pygame.KMOD_NONE)],
         func=toggle_paint_func)
+    set_1 = Command("toggle paint",[
+        Binding(pygame.KEYDOWN, key=pygame.K_1, mod=pygame.KMOD_NONE)],
+        func=set_1_func)
+    set_2 = Command("toggle paint",[
+        Binding(pygame.KEYDOWN, key=pygame.K_2, mod=pygame.KMOD_NONE)],
+        func=set_2_func)
+    set_3 = Command("toggle paint",[
+        Binding(pygame.KEYDOWN, key=pygame.K_3, mod=pygame.KMOD_NONE)],
+        func=set_3_func)
+    set_4 = Command("toggle paint",[
+        Binding(pygame.KEYDOWN, key=pygame.K_4, mod=pygame.KMOD_NONE)],
+        func=set_4_func)
+    set_5 = Command("toggle paint",[
+        Binding(pygame.KEYDOWN, key=pygame.K_5, mod=pygame.KMOD_NONE)],
+        func=set_5_func)
+    set_6 = Command("toggle paint",[
+        Binding(pygame.KEYDOWN, key=pygame.K_6, mod=pygame.KMOD_NONE)],
+        func=set_6_func)
+    set_7 = Command("toggle paint",[
+        Binding(pygame.KEYDOWN, key=pygame.K_7, mod=pygame.KMOD_NONE)],
+        func=set_7_func)
+    set_8 = Command("toggle paint",[
+        Binding(pygame.KEYDOWN, key=pygame.K_8, mod=pygame.KMOD_NONE)],
+        func=set_8_func)
+    set_9 = Command("toggle paint",[
+        Binding(pygame.KEYDOWN, key=pygame.K_9, mod=pygame.KMOD_NONE)],
+        func=set_9_func)
+    set_0 = Command("toggle paint",[
+        Binding(pygame.KEYDOWN, key=pygame.K_0, mod=pygame.KMOD_NONE)],
+        func=set_0_func)
+    paint = Command("paint",[
+        Binding(pygame.KEYDOWN, key=pygame.K_c, mod=pygame.KMOD_NONE)],
+        func=paint_vertex_edge_func)
+    paint_area = Command("paint",[
+        Binding(pygame.KEYDOWN, key=pygame.K_c, mod=pygame.KMOD_SHIFT)],
+        func=color_area)
+    toggle_hitbox_hover = Command("toggle hitbox hover",[
+        Binding(pygame.KEYDOWN, key=pygame.K_d, mod=pygame.KMOD_NONE)],
+        func = toggle_hitbox_hover_func)
     
 
     #any_key = command("any_key", [binding(pygame.KEYDOWN)], func=check_mods())
-    bindings = [create_vertex, create_ghost_vertex, add_edge, cancel_edge, delete_vertex, delete_edge, restart, toggle_ghost_vertecies, toggle_grid_lines, toggle_paint]
+    bindings = [create_vertex, create_ghost_vertex, add_edge, cancel_edge, delete_vertex, delete_edge, restart, toggle_ghost_vertecies, toggle_grid_lines,
+                set_1,set_2,set_3,set_4,set_5,set_6,set_7,set_8,set_9,set_0,paint,paint_area,toggle_hitbox_hover]
     used_mods = set()
     for command in bindings:
         for binding in command.bindings:
@@ -174,6 +230,7 @@ def create_bindings():
 def check_bindings(event):
     for command in bindings:
         if command.evoke(event):
+            state.update = True
             continue
 
 
@@ -221,6 +278,7 @@ class d_grid:
     
 
     def update_grid(self, grid: grid.Grid):
+        print("update")
         self.grid_w = grid.width
         self.grid_h = grid.height
         self.grid_size_px = screen_height * options.grid_scale
@@ -229,7 +287,8 @@ class d_grid:
         self.line_spacing = self.grid_size_px // self.num_lines #spacing between lines in pixels
         self.vertex_hitbox_scale = options.vertex_hitbox_extra  #makes vertex hitboxes a tiny bit bigger
         self.vertex_scale_increase = min(((self.num_lines-self.start_lines)/self.start_lines)*options.vertex_scale_step,options.vertex_scale_increase_max)
-        
+        self.region_surface = pygame.Surface((self.grid_size_px, self.grid_size_px))
+        self.region_surface.fill(options.background_color)
         self.hitboxes = []
         self.edge_hitboxes = []
         self.vertex_hitboxes = []
@@ -278,7 +337,6 @@ class d_grid:
         for edge in grid.get_all_edges():
             hitbox = Edge_Hitbox(edge)
             e_hitboxes = []
-            e_c_hitboxes = []
             v1, v2 = edge.vertex1, edge.vertex2
             x1, y1 = self.line_spacing*(v1.x+1.5), self.line_spacing*(v1.y+1.5)
             x2, y2 = self.line_spacing*(v2.x+1.5), self.line_spacing*(v2.y+1.5)
@@ -290,12 +348,7 @@ class d_grid:
                 rect = pygame.Rect((x1+((-0.5*options.edge_hitbox_scaling)*edge_width)+edge_dir_x*i,y1+((-0.5*options.edge_hitbox_scaling)*edge_width)+edge_dir_y*i),
                                    (options.edge_hitbox_scaling*edge_width, options.edge_hitbox_scaling*edge_width))
                 e_hitboxes.append(Hitbox(rect, hitbox_type.EDGE, color = options.edge_hitbox_color))
-                rect = pygame.Rect((x1+((-0.5*options.edge_hitbox_scaling)*edge_width)+edge_dir_x*i,y1+((-0.5*options.edge_hitbox_scaling)*edge_width)+edge_dir_y*i),
-                                   (options.edge_hitbox_color_rect_scaling*edge_width, options.edge_hitbox_color_rect_scaling*edge_width))
-                e_c_hitboxes.append(Hitbox(rect, hitbox_type.EDGE, color = options.edge_hitbox_color))
-
             hitbox.hitboxes = e_hitboxes
-            hitbox.color_hitboxes = e_c_hitboxes
             self.edge_hitboxes.append(hitbox)
         
         for vertex in grid.get_all_vertices():
@@ -304,29 +357,6 @@ class d_grid:
             rect = pygame.Rect((self.line_spacing*(x+1.5)-(width/2),self.line_spacing*(y+1.5)-(width/2)),
                     (width,width))
             self.vertex_hitboxes.append(Hitbox(rect, hitbox_type.VERTEX, color=options.vertex_hitbox_color))
-    
-    def generate_color_hitboxes(self):
-        self.color_hitboxes = np.full((int(self.grid_size_px//options.color_hitboxes_stride), int(self.grid_size_px//options.color_hitboxes_stride)), None)
-        w,h = self.color_hitboxes.shape
-        width = 1+2*options.color_hitboxes_stride
-        
-        for x in range(w):
-            for y in range(h):
-                rect = pygame.Rect((x*width-(width/2)-1,y*width-(width/2)-1),
-                    (width+2,width+2))
-                self.color_hitboxes[y][x] = Hitbox(rect, hitbox_type.COLOR, color=options.color_hitbox_color)
-        
-        for x in range(w):
-            for y in range(h):
-                if x >= 1:
-                    self.color_hitboxes[y][x].adjacent.append(self.color_hitboxes[y][x-1])
-                if y >= 1:
-                    self.color_hitboxes[y][x].adjacent.append(self.color_hitboxes[y-1][x])
-                if x <w-1:
-                    self.color_hitboxes[y][x].adjacent.append(self.color_hitboxes[y][x+1])
-                if y <h-1:
-                    self.color_hitboxes[y][x].adjacent.append(self.color_hitboxes[y+1][x])
-
 
     
 
@@ -335,57 +365,48 @@ gr = d_grid(grid.Grid(options.start_dim,options.start_dim))
 
 
 
-def display_grid(gr: d_grid):
-    dis_grid = pygame.Surface((gr.grid_size_px, gr.grid_size_px))
+def display_grid(gr: d_grid, partial = False):
+    dis_grid = pygame.Surface.copy(gr.region_surface)
     pos = pygame.mouse.get_pos()
-    dis_grid.fill("white")
+    if not partial:
+        for hitbox in gr.hitboxes:
+            if hitbox.orientation == orientation.HORIZONTAL:
+                #various options for displaying the hitboxes for testing purposes
+                if options.show_hitboxes == "Full" or (options.show_xy_hitbox_on_hover and hitbox.collide_rect.collidepoint(pos)):
+                    pygame.draw.rect(dis_grid, hitbox.color, hitbox.rect)
+                elif options.show_hitboxes == "Small":
+                    pygame.draw.rect(dis_grid, hitbox.color, hitbox.rect.scale_by(1,0.5))
+            else:
+                #various options for displaying the hitboxes for testing purposes
+                if options.show_hitboxes == "Full" or (options.show_xy_hitbox_on_hover and hitbox.collide_rect.collidepoint(pos)):
+                    pygame.draw.rect(dis_grid, hitbox.color, hitbox.rect)
+                elif options.show_hitboxes == "Small":
+                    pygame.draw.rect(dis_grid, hitbox.color, hitbox.rect.scale_by(0.5,1))
 
-    for hitbox in gr.hitboxes:
-        if hitbox.orientation == orientation.HORIZONTAL:
-            #various options for displaying the hitboxes for testing purposes
-            if options.show_hitboxes == "Full" or (options.show_hitbox_on_hover and hitbox.collide_rect.collidepoint(pos)):
-                pygame.draw.rect(dis_grid, hitbox.color, hitbox.rect)
-            elif options.show_hitboxes == "Small":
-                pygame.draw.rect(dis_grid, hitbox.color, hitbox.rect.scale_by(1,0.5))
-        else:
-            #various options for displaying the hitboxes for testing purposes
-            if options.show_hitboxes == "Full" or (options.show_hitbox_on_hover and hitbox.collide_rect.collidepoint(pos)):
-                pygame.draw.rect(dis_grid, hitbox.color, hitbox.rect)
-            elif options.show_hitboxes == "Small":
-                pygame.draw.rect(dis_grid, hitbox.color, hitbox.rect.scale_by(0.5,1))
-
-    if options.show_grid_lines:
+    if options.show_grid_lines and not partial:
         for i in range(gr.num_lines):
             pygame.draw.line(dis_grid, "black", ((int(gr.line_spacing*int(i)+gr.line_spacing*0.5)), 0), (int(gr.line_spacing*int(i)+gr.line_spacing*0.5), int(gr.grid_size_px)), width=options.grid_scale)
             pygame.draw.line(dis_grid, "black", (0, int(gr.line_spacing*int(i)+gr.line_spacing*0.5)), (int(gr.grid_size_px), int(gr.line_spacing*int(i)+gr.line_spacing*0.5)), width=options.grid_scale)
    
-    
-    if state.paint_area:
-        for hitbox_list in gr.color_hitboxes.tolist():
-            for hitbox in hitbox_list:
-                pygame.draw.rect(dis_grid, hitbox.color, hitbox.rect)
-    if state.paint_area:
-        for hitbox_list in gr.color_hitboxes.tolist():
-            for hitbox in hitbox_list:
-                if options.show_hitbox_on_hover and hitbox.collide_rect.collidepoint(pos):
-                    pygame.draw.rect(dis_grid, options.edge_color, hitbox.rect)
     if state.creating_edge:
         x1, y1 = gr.line_spacing*(state.edge_start.x+1.5), gr.line_spacing*(state.edge_start.y+1.5)
         x2, y2 = tuple(map(lambda x: x * options.grid_scale, pos))
         edge_width = int(options.edge_width*(gr.line_spacing//4)*(options.vertex_scale_min+gr.vertex_scale_increase))
-        pygame.draw.line(dis_grid, color=options.edge_color, start_pos=(x1,y1), end_pos=(x2,y2), width=edge_width)
+        pygame.draw.line(dis_grid, color=(options.edge_color if state.color_index == 9 else options.edge_vertex_color_set[state.color_index]), start_pos=(x1,y1), end_pos=(x2,y2), width=edge_width)
 
     for edge in gr.grid.edges:
         v1,  v2 = edge.vertex1, edge.vertex2
         x1, y1 = gr.line_spacing*(v1.x+1.5), gr.line_spacing*(v1.y+1.5)
         x2, y2 = gr.line_spacing*(v2.x+1.5), gr.line_spacing*(v2.y+1.5)
         edge_width = int(options.edge_width*(gr.line_spacing//4)*(options.vertex_scale_min+gr.vertex_scale_increase))
-        pygame.draw.line(dis_grid, color=options.edge_color, start_pos=(x1,y1), end_pos=(x2,y2), width=edge_width)
+        pygame.draw.line(dis_grid, color=edge.color, start_pos=(x1,y1), end_pos=(x2,y2), width=edge_width)
 
     for vertex in gr.grid.get_all_vertices():
         if (vertex is not None) and (not vertex.ghost or options.show_ghost_vertex):
             x, y = vertex.x, vertex.y
             pygame.draw.circle(dis_grid,color=vertex.color,center=(gr.line_spacing*(x+1.5), gr.line_spacing*(y+1.5)),radius=(gr.line_spacing/4)*(vertex.scale+gr.vertex_scale_increase), width=vertex.width)
+            if not vertex.ghost:
+                pygame.draw.circle(dis_grid,color=options.vertex_ring_color,center=(gr.line_spacing*(x+1.5), gr.line_spacing*(y+1.5)),radius=(gr.line_spacing/4)*(vertex.scale+gr.vertex_scale_increase), width=int((gr.line_spacing/4)*(vertex.scale+gr.vertex_scale_increase)*0.2))
 
     for edge_hitbox in gr.edge_hitboxes:
         for hitbox in edge_hitbox.hitboxes:
@@ -396,69 +417,115 @@ def display_grid(gr: d_grid):
              pygame.draw.rect(dis_grid, hitbox.color, hitbox.rect)
 
 
-    if options.show_mouse_pos == True: 
+    if options.show_mouse_pos == True and not partial: 
         font = pygame.font.SysFont(None, 24*options.grid_scale)
         img = font.render(str(get_mouse_grid_pos(gr)), True, "black")
         dis_grid.blit(img, tuple(map(lambda x: x * options.grid_scale, pos)))
     screen.blit(pygame.transform.smoothscale_by(dis_grid,1/options.grid_scale))
+    return dis_grid
     #pygame.gfxdraw.textured_polygon(screen, [(0,0),(0,screen_height),(screen_height,screen_height),(screen_height,0)], dis_grid,0,0)
 
-def collides_edge_or_vertex(hitbox):
-    if hitbox.rect.collidelist(gr.vertex_hitboxes) != -1:
-        return True
-    for edge_hitbox in gr.edge_hitboxes:
-        if hitbox.rect.collidelist(edge_hitbox.color_hitboxes) != -1:
-            return True
-    return False
+# def collides_edge_or_vertex(hitbox):
+#     if hitbox.rect.collidelist(gr.vertex_hitboxes) != -1:
+#         return True
+#     for edge_hitbox in gr.edge_hitboxes:
+#         if hitbox.rect.collidelist(edge_hitbox.color_hitboxes) != -1:
+#             return True
+#     return False
 
 
-def visit_hitbox(hitbox,visited):
-    visited.add(hitbox)
-    hitbox.color = pygame.colordict.THECOLORS["green"]
-    for box in hitbox.adjacent:
-        if box not in visited and not collides_edge_or_vertex(box):
-            visit_hitbox(box,visited)
-def color_area():
-    pos = pygame.mouse.get_pos()
+# def visit_hitbox(hitbox,visited):
+#     visited.add(hitbox)
+#     hitbox.color = pygame.colordict.THECOLORS["green"]
+#     for box in hitbox.adjacent:
+#         if box not in visited and not collides_edge_or_vertex(box):
+#             visit_hitbox(box,visited)
+# def color_area():
+#     pos = pygame.mouse.get_pos()
 
-    w,h = gr.color_hitboxes.shape
-    c_x = -1
-    c_y = -1
-    for x in range(w):
-        for y in range(h):
-            if gr.color_hitboxes[y][x].collide_rect.collidepoint(pos):
-                gr.color_hitboxes[y][x].color= options.edge_hitbox_color
-                c_x = x
-                c_y = y
-                break
-        if c_x != -1:
-            break
-    if c_x == -1:
-        return
-    visited = set()
-    queue = []
-    queue.append(gr.color_hitboxes[c_y,c_x])
-    while len(queue) > 0:
-        box = queue.pop(len(queue)-1)
-        visited.add(box)
-        box.color = pygame.colordict.THECOLORS["green"]
-        for b in box.adjacent:
-            if b not in visited and not collides_edge_or_vertex(box):
-                queue.append(b)
-            
-        
+#     w,h = gr.color_hitboxes.shape
+#     c_x = -1
+#     c_y = -1
+#     for x in range(w):
+#         for y in range(h):
+#             if gr.color_hitboxes[y][x].collide_rect.collidepoint(pos):
+#                 gr.color_hitboxes[y][x].color= options.edge_hitbox_color
+#                 c_x = x
+#                 c_y = y
+#                 break
+#         if c_x != -1:
+#             break
+#     if c_x == -1:
+#         return
+#     visited = set()
+#     queue = []
+#     queue.append(gr.color_hitboxes[c_y,c_x])
+#     while len(queue) > 0:
+#         box = queue.pop(len(queue)-1)
+#         visited.add(box)
+#         box.color = pygame.colordict.THECOLORS["green"]
+#         for b in box.adjacent:
+#             if b not in visited and not collides_edge_or_vertex(box):
+#                 queue.append(b)
 
 
+class Colorfill:
+    def __init__(self, color_from, color_to, pos):
+        self.color_from = color_from
+        self.color_to = color_to
+        self.visited = set()
+        self.queue = deque([])
+        self.queue.appendleft(pos)
 
 
+def color_area(event = None):
+    dis_grid = display_grid(gr,True)
+    grid_display = pygame.PixelArray(dis_grid)
+    region = pygame.PixelArray(gr.region_surface)
+    if not state.filling_color:
+        pos = pygame.mouse.get_pos()
+        pos_screen = (options.grid_scale*pos[0],options.grid_scale*pos[1])
+        color_from = grid_display[options.grid_scale*pos[0]][options.grid_scale*pos[1]]
+        print(color_from)
+        color_to = options.region_color_set[state.color_index]
+        state.color_fill = Colorfill(color_from,color_to, pos_screen)
+        state.filling_color = True
+    cycles = 0
+    while len(state.color_fill.queue) > 0:
+        px = state.color_fill.queue.pop()
+        x,y = px
+        state.color_fill.visited.add(px)
+        region[x][y] = state.color_fill.color_to
+        if x > 0:
+            if (grid_display[x-1][y] == state.color_fill.color_from) and ((x-1,y) not in state.color_fill.visited):
+                state.color_fill.queue.append((x-1,y))
+        if x < grid_display.shape[0]-1:
+            if (grid_display[x+1][y] == state.color_fill.color_from) and ((x+1,y) not in state.color_fill.visited):
+                state.color_fill.queue.append((x+1,y))
+        if y > 0:
+            if (grid_display[x][y-1] == state.color_fill.color_from) and ((x,y-1) not in state.color_fill.visited):
+                state.color_fill.queue.append((x,y-1))
+        if y < grid_display.shape[0]-1:
+            if (grid_display[x][y+1] == state.color_fill.color_from) and ((x,y+1) not in state.color_fill.visited):
+                state.color_fill.queue.append((x,y+1))
+        cycles +=1
+        if cycles >= state.color_max_cycles:
+            pygame.PixelArray.close(grid_display)
+            pygame.PixelArray.close(region)
+            fps = clock.get_fps()
+            print(fps)
+            if fps < options.target_fps:
+                state.color_max_cycles -= state.color_max_cycles*options.color_cycles_mod
+            else:
+                state.color_max_cycles += state.color_max_cycles*options.color_cycles_mod
+            return
+    pygame.PixelArray.close(grid_display)
+    pygame.PixelArray.close(region)
+    state.filling_color = False
+    #screen.blit(pygame.transform.smoothscale_by(dis_grid,1/options.grid_scale))
     
-    
-
-
 def create_vertex_func(event=None, ghost = False):
-    if state.paint_area:
-        color_area()
-        return
+
     if not state.can_input and not state.creating_edge:
         return
     state.can_input = False
@@ -481,7 +548,7 @@ def create_vertex_func(event=None, ghost = False):
         if ghost:
             print("ghost vertex")
         gr.grid.add_vertex(x,y,ghost=ghost, 
-                              color=options.ghost_color if ghost else options.vertex_color,
+                              color=options.ghost_color if ghost else (options.vertex_color if state.color_index == 9 else options.edge_vertex_color_set[state.color_index]),
                               width=options.ghost_width if ghost else options.vertex_width,
                               scale=options.ghost_scale if ghost else options.vertex_scale_min)
         gr.grid.trim()
@@ -489,15 +556,11 @@ def create_vertex_func(event=None, ghost = False):
             
 
 def create_ghost_vertex_func(event=None):
-    if state.paint_area:
-        return
     if state.can_input and state.creating_edge:
         create_edge_func(ghost=True)
     create_vertex_func(event, ghost=True)
 
 def create_edge_func(event=None, ghost = False):
-    if state.paint_area:
-        return
     pos = get_mouse_grid_pos()
     if pos is (None, None):
         return
@@ -514,14 +577,12 @@ def create_edge_func(event=None, ghost = False):
                 return
             else:
                 state.creating_edge = False
-                gr.grid.add_edge(state.edge_start, vert, options.edge_color)
+                gr.grid.add_edge(state.edge_start, vert, (options.edge if state.color_index == 9 else options.edge_vertex_color_set[state.color_index]))
                 gr.update_grid(gr.grid)
             
 
 
 def delete_vertex_func(event=None):
-    if state.paint_area:
-        return
     if not state.can_input and not state.creating_edge:
         return
     ((mx, xt), (my, yt)) = get_mouse_grid_pos()
@@ -537,8 +598,6 @@ def delete_vertex_func(event=None):
 
 
 def cancel_edge_func(event=None):
-    if state.paint_area:
-        return
     print("cancel")
     if state.creating_edge:
         state.creating_edge = False
@@ -546,8 +605,6 @@ def cancel_edge_func(event=None):
         return
 
 def delete_edge_func(event=None):
-    if state.paint_area:
-        return
     if not state.can_input:
         return
     if state.creating_edge:
@@ -566,7 +623,6 @@ def delete_edge_func(event=None):
             gr.grid.remove_edge(edge)
 
 def restart_func(event=None):
-    state.paint_area = False
     print("restart")
     gr.__init__(grid.Grid(3,3))
 
@@ -577,12 +633,56 @@ def grid_lines_toggle_func(event=None):
     options.show_grid_lines = not options.show_grid_lines
 
 def toggle_paint_func(event=None):
-    if state.paint_area:
-        state.paint_area = False
-        return
-    state.paint_area = True
-    gr.generate_color_hitboxes()
+    pass
+#     if state.paint_area:
+#         state.paint_area = False
+#         return
+#     state.paint_area = True
+#     #gr.generate_color_hitboxes()
+
+def set_1_func(event=None):
+    state.color_index = 1
+def set_2_func(event=None):
+    state.color_index = 2
+def set_3_func(event=None):
+    state.color_index = 3
+def set_4_func(event=None):
+    state.color_index = 4
+def set_5_func(event=None):
+    state.color_index = 5
+def set_6_func(event=None):
+    state.color_index = 6
+def set_7_func(event=None):
+    state.color_index = 7
+def set_8_func(event=None):
+    state.color_index = 8
+def set_9_func(event=None):
+    state.color_index = 9
+def set_0_func(event=None):
+    state.color_index = 0
+def paint_vertex_edge_func(event=None):
+    pos = pygame.mouse.get_pos()
+
+    for vertex_hitbox in gr.vertex_hitboxes:
+        if vertex_hitbox.collide_rect.collidepoint(pos):
+            ((mx, xt), (my, yt)) = get_mouse_grid_pos()
+            if xt is hitbox_type.INSERT and yt is hitbox_type.INSERT:
+                break
+            vert:grid.Vertex = gr.grid.get_vertex(mx, my)
+            if (vert is not None) and (not vert.ghost):
+                vert.color = (options.vertex_color if state.color_index == 9 else options.edge_vertex_color_set[state.color_index])
+                return
+
+    for edge_hitbox in gr.edge_hitboxes:
+        for hitbox in edge_hitbox.hitboxes:
+            if hitbox.collide_rect.collidepoint(pos):
+                ed = edge_hitbox.edge
+                ed.color = (options.vertex_color if state.color_index == 9 else options.edge_vertex_color_set[state.color_index])
+                return
     
+def toggle_hitbox_hover_func(Event = None):
+    options.show_hitbox_on_hover = not options.show_hitbox_on_hover
+
 
 def get_mouse_grid_pos(grid: d_grid = gr):
     """Get the grid position the mouse is currently hovering over.
@@ -617,8 +717,9 @@ def check_mods():
 
 
 
-pygame.event.set_blocked(pygame.MOUSEMOTION)
+#pygame.event.set_blocked(pygame.MOUSEMOTION)
 bindings, used_mods = create_bindings()
+    
 while running:
     # poll for events
     # pygame.QUIT event means the user clicked X to close your window
@@ -627,15 +728,20 @@ while running:
     for event in pygame.event.get():
         if event.type == pygame.QUIT:
             running = False
-        check_bindings(event)
+        if event.type == pygame.MOUSEMOTION:
+            state.update = True
+        if not state.filling_color:
+            check_bindings(event)
         #print(event)
         manager.process_events(event)
-    
-    print(clock.get_fps())
+    if state.filling_color:
+        color_area()
+    clock.get_fps()
     display_grid(gr)
     manager.update(dt)
     manager.draw_ui(screen)
     # flip() the display to put your work on screen
+    #if state.update:
     pygame.display.flip()
 
     # limits FPS to 60
