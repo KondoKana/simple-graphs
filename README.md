@@ -35,3 +35,7 @@ This applies to colors existing features and all new ones
 Region colors are lighter than edge/vertex colors  
 c -> color edge or vertex (whatever hovering over)  
 Shift+c -> color region. Probably breaks something if you do it over a vertex.  
+
+
+Demo here  
+https://youtu.be/r6hpAovFYS0
