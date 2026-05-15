@@ -4,7 +4,7 @@ import numpy as np
 class Grid:
     """Vertex and edge grid that expands when given indexes out of bounds by 1"""
 
-    def __init__(self, width=3, height=3):
+    def __init__(self, width=3, height=3, min_dim = 4):
         """Initialize the grid with the given dimensions.
         Args:
             width (int): Initial number of columns.
@@ -14,7 +14,14 @@ class Grid:
         self.height = height
         self.grid = np.full((height, width), None)
         self.edges = []
+        self.min_dim = min_dim
 
+    def update_vertex_locations(self):
+        for row in range(self.height):
+            for col in range(self.width):
+                cell = self.grid[row][col]
+                if isinstance(cell, Vertex):
+                    self.grid[row][col] = cell.set_coordinates(col, row)
 
     def expand(self):
         """Expand the grid by adding a new row and column on each side."""
@@ -26,13 +33,58 @@ class Grid:
         self.grid = np.append(new_row,self.grid, axis=0)
         self.grid = np.append(self.grid,new_row, axis=0)
         self.height += 2
+        self.update_vertex_locations()
     
-    def trim(self,min_dim):
-        self.trim_tl(min_dim)
-        self.trim_br(min_dim)
-        self.trim_tr(min_dim)
-        self.trim_bl(min_dim)
+    def trim(self):
+        print("trim")
+        # self.trim_tl(min_dim)
+        # self.trim_br(min_dim)
+        # self.trim_tr(min_dim)
+        # self.trim_bl(min_dim)
+        if (self.height < self.min_dim) or (self.width< self.min_dim): 
+            return
+        self.trim_cols()
+        self.trim_rows()
+        odd_height = self.height%2
+        height_added = 0
+        #if self.height != self.width and max(self.height, self.width) > min_dim:
+
+        if self.height < self.width and self.width > self.min_dim:
+            for i in range(self.width - self.height):
+                if i % 2:
+                    self.add_row(self.height-1)
+                    height_added+=1
+                else:
+                    self.add_row(-1)
+                    height_added+=1
+            if not height_added % 2:
+                self.add_row(-1)
+        
+        width_added = 0
+        if self.width < self.height and self.height > self.min_dim:
+            for i in range(self.height - self.width):
+                if i % 2:
+                    self.add_col(-1)
+                else:
+                    self.add_col(self.width-1)
+            if not width_added % 2:
+                self.add_col(self.width-1)
+        self.update_vertex_locations()
+        
     
+    def trim_cols(self):
+        for x in reversed(range(self.width)):
+            if all((self.grid[y][x] is None) for y in range(self.height)) and self.width >= self.min_dim:
+                self.grid = np.delete(self.grid, x, axis = 1 )
+                self.width-=1
+    
+    def trim_rows(self):
+        for y in reversed(range(self.height)):
+            if all((self.grid[y][x] is None) for x in range(self.width)) and self.height >= self.min_dim:
+                self.grid = np.delete(self.grid, y, axis = 0 )
+                self.height -= 1
+    
+
     def trim_tl(self,min_dim):
         min_tl = max(self.width, self.height)
         for x in range(self.width):
@@ -103,7 +155,7 @@ class Grid:
                 self.width -= 1
 
     """Add a vertex at the specified coordinates, expanding the grid if necessary."""
-    def add_vertex(self, x, y, ghost=False, color=(0,0,0), width = 0):
+    def add_vertex(self, x, y, ghost=False, color=(0,0,0), width = 0, scale = 1):
         expanded = False
         # if not (-1 <= x <= self.width and -1 <= y <= self.height):
         #     raise ValueError("Coordinates out of bounds")
@@ -112,25 +164,46 @@ class Grid:
             self.expand()
             y+=1
             x+=1
-        vert = Vertex(ghost=ghost, color=color, width=width)
+        vert = Vertex(ghost=ghost, color=color, width=width, scale = scale)
         self.grid[y][x] = vert #switched x and y because of how numpy arrays are indexed
+        self.update_vertex_locations()
         return expanded
     
+
+
+
     def add_col(self,x):
         new_col = np.full(self.height, None)
         self.grid = np.insert(self.grid,x+1,new_col, axis=1)
         self.width += 1
+        self.update_vertex_locations()
     
     def add_row(self,y):
         new_row = np.full(self.width, None)
         self.grid = np.insert(self.grid,y+1,new_row, axis=0)
         self.height += 1
+        self.update_vertex_locations()
 
     def get_vertex(self, x, y):
         if not (0 <= x < self.width and 0 <= y < self.height):
             return None
             print("ValueError: Coordinates out of bounds")
         return self.grid[y][x]
+    
+    def remove_vertex(self, x, y):
+        if not (0 <= x < self.width and 0 <= y < self.height):
+            return None
+            print("ValueError: Coordinates out of bounds")
+        vert = self.grid[y][x]
+        for edge in self.edges:
+            if edge.incident_to(vert):
+                self.edges.remove(edge)
+        for edge in self.edges:         #do twice be otherwise every other edge isnt removed
+            if edge.incident_to(vert):
+                self.edges.remove(edge)
+        self.grid[y][x] = None
+        return self.grid[y][x]
+
     
     def get_all_vertices(self): 
         vertices = []
@@ -141,31 +214,22 @@ class Grid:
                     vertices.append(cell.set_coordinates(col, row))
         return vertices
 
-    def add_edge(self, x1, y1, x2, y2, color=(0,0,0)):
-        vertex1 = self.get_vertex(x1, y1)
-        vertex2 = self.get_vertex(x2, y2)
+    def add_edge(self, v1,  v2, color=(0,0,0)):
+        vertex1 = v1
+        vertex2 = v2
         if vertex1 is None or vertex2 is None:
             raise ValueError("Both incident vertices must exist")
         edge = Edge(vertex1, vertex2, color)
         self.edges.append(edge)
         return edge
 
-    def get_all_edges(self):
-        vertex_coords = {}
-        for row in range(self.height):
-            for col in range(self.width):
-                cell = self.grid[row][col]
-                if isinstance(cell, Vertex):
-                    vertex_coords[cell] = (col, row)
+    def remove_edge(self, edge):
+        self.edges.remove(edge)
 
-        edges = []
-        for edge in self.edges:
-            edges.append({
-                "edge": edge,
-                "vertex1": vertex_coords.get(edge.vertex1),
-                "vertex2": vertex_coords.get(edge.vertex2),
-            })
-        return edges
+    def get_all_edges(self):
+        return self.edges
+
+
 
     def __print__(self):
         for row in self.grid:
@@ -173,11 +237,11 @@ class Grid:
 
 
 class Vertex:
-    def __init__(self, ghost=False, color = (0,0,0), width = 0):
+    def __init__(self, ghost=False, color = (0,0,0), width = 0, scale = 1):
         self.ghost = ghost
         self.color = color
         self.width = width
-        print(self.width)
+        self.scale = scale
     def __print__(self):
         return "G" if self.ghost else "V"
     def __str__(self):
@@ -192,3 +256,5 @@ class Edge:
         self.vertex1 = vertex1
         self.vertex2 = vertex2
         self.color = color
+    def incident_to(self, vertex: Vertex):
+        return (vertex is self.vertex2 or vertex is self.vertex1)
