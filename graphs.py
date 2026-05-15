@@ -2,7 +2,6 @@ from random import shuffle
 from typing import Literal
 import pygame
 import pygame.gfxdraw
-import pygame_gui
 import grid
 import math
 import numpy as np
@@ -13,7 +12,6 @@ info = pygame.display.Info()
 screen_percentage = 0.5
 screen_height = min(info.current_w, info.current_h)*screen_percentage
 screen_width = screen_height
-manager = pygame_gui.UIManager((screen_width, screen_height))
 
 screen = pygame.display.set_mode((screen_width, screen_height))
 region_surface = pygame.Surface((screen_width, screen_height))
@@ -278,7 +276,6 @@ class d_grid:
     
 
     def update_grid(self, grid: grid.Grid):
-        print("update")
         self.grid_w = grid.width
         self.grid_h = grid.height
         self.grid_size_px = screen_height * options.grid_scale
@@ -486,7 +483,6 @@ def color_area(event = None):
         pos = pygame.mouse.get_pos()
         pos_screen = (options.grid_scale*pos[0],options.grid_scale*pos[1])
         color_from = grid_display[options.grid_scale*pos[0]][options.grid_scale*pos[1]]
-        print(color_from)
         color_to = options.region_color_set[state.color_index]
         state.color_fill = Colorfill(color_from,color_to, pos_screen)
         state.filling_color = True
@@ -513,7 +509,6 @@ def color_area(event = None):
             pygame.PixelArray.close(grid_display)
             pygame.PixelArray.close(region)
             fps = clock.get_fps()
-            print(fps)
             if fps < options.target_fps:
                 state.color_max_cycles -= state.color_max_cycles*options.color_cycles_mod
             else:
@@ -542,11 +537,9 @@ def create_vertex_func(event=None, ghost = False):
             gr.update_grid(gr.grid)
 
         if gr.grid.get_vertex(x,y) is not None and not gr.grid.get_vertex(x,y).ghost:
-            print("vertex already exists at", mouse_grid_pos)
             return
-        print(f"create vertex at {mouse_grid_pos}")
-        if ghost:
-            print("ghost vertex")
+        # if ghost:
+        #     print("ghost vertex")
         gr.grid.add_vertex(x,y,ghost=ghost, 
                               color=options.ghost_color if ghost else (options.vertex_color if state.color_index == 9 else options.edge_vertex_color_set[state.color_index]),
                               width=options.ghost_width if ghost else options.vertex_width,
@@ -598,7 +591,6 @@ def delete_vertex_func(event=None):
 
 
 def cancel_edge_func(event=None):
-    print("cancel")
     if state.creating_edge:
         state.creating_edge = False
         state.edge_start = None
@@ -623,7 +615,6 @@ def delete_edge_func(event=None):
             gr.grid.remove_edge(edge)
 
 def restart_func(event=None):
-    print("restart")
     gr.__init__(grid.Grid(3,3))
 
 def ghost_toggle_func(event=None):
@@ -733,13 +724,10 @@ while running:
         if not state.filling_color:
             check_bindings(event)
         #print(event)
-        manager.process_events(event)
     if state.filling_color:
         color_area()
     clock.get_fps()
     display_grid(gr)
-    manager.update(dt)
-    manager.draw_ui(screen)
     # flip() the display to put your work on screen
     #if state.update:
     pygame.display.flip()
